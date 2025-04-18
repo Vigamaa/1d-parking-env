@@ -37,24 +37,15 @@ The project includes:
 
 ## Installation and Setup
 
-### Method 1: Clone and Run Locally
+### Clone and Run Locally
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/1d-parking-env.git
+git clone https://github.com/vigamaa/1d-parking-env.git
 cd 1d-parking-env
 
-# Create and activate a virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
-pip install -r requirements.txt
-```
-
-If you don't have a requirements.txt file, you can:
-
-1. Use the provided dependencies.txt file:
+1. Use the provided `dependencies.txt` file:
 ```bash
 pip install -r dependencies.txt
 ```
@@ -64,38 +55,7 @@ pip install -r dependencies.txt
 pip install flask gymnasium flask-sqlalchemy psycopg2-binary gunicorn
 ```
 
-### Method 2: Run on Replit
-
-1. Visit the Replit page: [https://replit.com/@YourUsername/1d-parking-env](https://replit.com/@YourUsername/1d-parking-env)
-2. Fork the repl to your account
-3. Press the Run button to start the application
-
-### Creating requirements.txt
-
-If you need to generate a requirements.txt file before uploading to GitHub, run:
-
-```bash
-pip freeze > requirements.txt
-```
-
-This will capture all installed packages. For a minimal requirements file, you can create one manually:
-
-```
-flask==2.3.2
-gymnasium==0.28.1
-flask-sqlalchemy==3.0.5
-gunicorn==21.2.0
-psycopg2-binary==2.9.6
-```
-
-### Environment Variables (Optional)
-
-For production deployments, you might want to set:
-
-```
-FLASK_ENV=production
-SECRET_KEY=your_secret_key
-```
+> ⚠️ The application runs on port `5003` by default. After starting the server, navigate to `http://127.0.0.1:5003` in your browser.
 
 ## Usage
 
@@ -108,12 +68,11 @@ Start the web server:
 ```bash
 python main.py
 # or use gunicorn for production:
-gunicorn --bind 0.0.0.0:5000 main:app
+gunicorn --bind 0.0.0.0:500 main:app
 ```
 
 Then open a browser and navigate to:
-- Local: `http://localhost:5000`
-- On Replit: The URL shown in the webview
+- Local: `http://127.0.0.1:5003`
 
 The web interface provides:
 - **Main Page**: Navigation between modes
@@ -244,13 +203,12 @@ If you encounter any issues, you can enable additional debug output:
    ```python
    # In main.py
    if __name__ == '__main__':
-       app.run(debug=True, host='0.0.0.0', port=5000)
+       app.run(debug=True, host='0.0.0.0', port=5003)
    ```
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+## Author
+Alexander Troetsch

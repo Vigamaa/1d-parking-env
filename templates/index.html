@@ -9,22 +9,59 @@
         body {
             padding: 20px;
         }
-        #environment-display {
+        .environment-text {
             font-family: monospace;
-            margin-top: 20px;
             font-size: 18px;
             white-space: pre;
+            margin-bottom: 15px;
         }
-        #actions {
+        .control-section {
             margin-top: 20px;
         }
-        #status {
+        .status-section {
             margin-top: 20px;
-            padding: 10px;
+            padding: 15px;
             background-color: var(--bs-dark);
+            border-radius: 5px;
         }
         .game-container {
-            max-width: 800px;
+            max-width: 900px;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            margin-bottom: 10px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background-color: var(--bs-dark);
+            border-radius: 5px;
+        }
+        .mode-toggle {
+            margin-top: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--bs-gray-700);
+        }
+        .training-controls {
+            margin-top: 20px;
+            display: none;
+        }
+        .manual-controls {
+            margin-top: 20px;
+        }
+        .badge {
+            margin-left: 10px;
+        }
+        .velocity-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -32,39 +69,78 @@
     <div class="container game-container">
         <h1>1D Parking Environment</h1>
         <p class="lead">
-            Use the controls to park the car (C) in the parking zone (P).
-            <br>
-            Try to stop the car within the parking zone with close to zero velocity.
+            Park a car on a one-dimensional track. The goal is to stop the car precisely in the 
+            parking zone with minimal velocity.
         </p>
         
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">Controls</h5>
-                <button id="reset" class="btn btn-warning">Reset Environment</button>
-                <div id="actions" class="btn-group" role="group">
-                    <button id="action-0" class="btn btn-primary">Accelerate Backward</button>
-                    <button id="action-1" class="btn btn-secondary">Coast</button>
-                    <button id="action-2" class="btn btn-primary">Accelerate Forward</button>
+                <div class="mode-toggle">
+                    <h5 class="card-title">Mode Selection</h5>
+                    <div class="btn-group" role="group">
+                        <button id="manual-mode" class="btn btn-primary active">Manual Control</button>
+                        <button id="rl-mode" class="btn btn-secondary">RL Simulation</button>
+                    </div>
+                    <span id="simulation-badge" class="badge bg-success d-none">Simulation Running</span>
+                    <div class="alert alert-info mt-3">
+                        <strong>Tip:</strong> Click "RL Simulation" to switch to the AI agent mode!
+                    </div>
+                </div>
+                
+                <div id="manual-controls" class="manual-controls">
+                    <h5 class="card-title">Manual Controls</h5>
+                    <button id="reset" class="btn btn-warning">Reset Environment</button>
+                    <div class="btn-group mt-3" role="group">
+                        <button id="action-0" class="btn btn-primary">⬅️ Accelerate Backward</button>
+                        <button id="action-1" class="btn btn-secondary">Coast</button>
+                        <button id="action-2" class="btn btn-primary">Accelerate Forward ➡️</button>
+                    </div>
+                </div>
+                
+                <div id="training-controls" class="training-controls">
+                    <h5 class="card-title">RL Agent Controls</h5>
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <label for="episodes" class="form-label">Training Episodes:</label>
+                            <input type="number" id="episodes" class="form-control" value="100" min="10" max="1000">
+                        </div>
+                        <div class="col-md-6 mt-3">
+                            <button id="train-agent" class="btn btn-success">Train Agent</button>
+                            <button id="simulate-agent" class="btn btn-primary">Run Simulation</button>
+                            <button id="stop-simulation" class="btn btn-danger">Stop</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
         
-        <div id="environment-display" class="card p-3 mt-3"></div>
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Environment Visualization</h5>
+                <div class="canvas-container">
+                    <canvas id="env-canvas"></canvas>
+                    <div class="velocity-indicator" id="velocity-indicator"></div>
+                </div>
+                <div id="environment-display" class="environment-text"></div>
+            </div>
+        </div>
         
         <div id="status" class="card mt-3">
-            <h5>Status</h5>
-            <div class="row">
-                <div class="col-md-6">
-                    <p><strong>Position:</strong> <span id="position">0.0</span></p>
-                    <p><strong>Velocity:</strong> <span id="velocity">0.0</span></p>
+            <div class="card-body">
+                <h5 class="card-title">Status</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Position:</strong> <span id="position">0.0</span></p>
+                        <p><strong>Velocity:</strong> <span id="velocity">0.0</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Last Reward:</strong> <span id="reward">0.0</span></p>
+                        <p><strong>In Target Zone:</strong> <span id="in-zone">No</span></p>
+                    </div>
                 </div>
-                <div class="col-md-6">
-                    <p><strong>Last Reward:</strong> <span id="reward">0.0</span></p>
-                    <p><strong>In Target Zone:</strong> <span id="in-zone">No</span></p>
+                <div class="alert alert-info mt-2" role="alert">
+                    <p><strong>Message:</strong> <span id="message">Initialize the environment to begin.</span></p>
                 </div>
-            </div>
-            <div class="mt-2">
-                <p><strong>Message:</strong> <span id="message"></span></p>
             </div>
         </div>
     </div>
@@ -77,8 +153,26 @@
             truncated: false,
             info: {},
             reward: 0,
-            totalSteps: 0
+            totalSteps: 0,
+            simulation: {
+                running: false,
+                interval: null
+            }
         };
+        
+        // Canvas setup
+        const canvas = document.getElementById('env-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas dimensions for proper resolution
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        
+        // Initial resize and listen for window resize
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
         
         // Reset the environment
         async function resetEnvironment() {
@@ -134,8 +228,9 @@
                 gameState.info = data.info;
                 gameState.totalSteps++;
                 
-                // Update display
-                updateDisplay(data.render);
+                // Update both displays
+                updateTextDisplay(data.render);
+                updateCanvasDisplay(data.visual_data);
                 
                 // Update status
                 document.getElementById('position').textContent = data.observation[0].toFixed(2);
@@ -156,8 +251,10 @@
                     document.getElementById('message').textContent = message;
                     
                     // Disable action buttons
-                    document.querySelectorAll('#actions button').forEach(btn => {
-                        btn.disabled = true;
+                    document.querySelectorAll('#manual-controls button').forEach(btn => {
+                        if (btn.id !== 'reset') {
+                            btn.disabled = true;
+                        }
                     });
                 }
             } catch (error) {
@@ -166,16 +263,380 @@
             }
         }
         
-        // Update the environment display
-        function updateDisplay(render) {
+        // Simple client-side implementation of Q-learning
+        const clientRL = {
+            // Parameters
+            learningRate: 0.1,         // Alpha
+            discountFactor: 0.99,      // Gamma
+            explorationRate: 0.3,      // Epsilon
+            positionBins: 10,          // Number of discrete position bins
+            velocityBins: 10,          // Number of discrete velocity bins
+            qTable: {},                // Q-table (state -> [action values])
+            
+            // Discretize state for Q-table lookup
+            discretizeState: function(state) {
+                // Map position from [-5,5] to [0,positionBins-1]
+                const position = state[0];
+                const positionRange = 10; // -5 to 5 = 10 units
+                let posBin = Math.floor((position + 5) / positionRange * this.positionBins);
+                posBin = Math.max(0, Math.min(this.positionBins - 1, posBin));
+                
+                // Map velocity from [-2,2] to [0,velocityBins-1]
+                const velocity = state[1];
+                const velocityRange = 4; // -2 to 2 = 4 units
+                let velBin = Math.floor((velocity + 2) / velocityRange * this.velocityBins);
+                velBin = Math.max(0, Math.min(this.velocityBins - 1, velBin));
+                
+                return `${posBin},${velBin}`;
+            },
+            
+            // Get action using epsilon-greedy policy
+            getAction: function(state, training = true) {
+                const discreteState = this.discretizeState(state);
+                
+                // Explore: choose random action
+                if (training && Math.random() < this.explorationRate) {
+                    return Math.floor(Math.random() * 3); // Random action (0, 1, or 2)
+                }
+                
+                // Initialize state if not in Q-table
+                if (!this.qTable[discreteState]) {
+                    this.qTable[discreteState] = [0, 0, 0];
+                }
+                
+                // Exploit: choose best action
+                const actionValues = this.qTable[discreteState];
+                let maxValue = actionValues[0];
+                let bestAction = 0;
+                
+                for (let i = 1; i < actionValues.length; i++) {
+                    if (actionValues[i] > maxValue) {
+                        maxValue = actionValues[i];
+                        bestAction = i;
+                    }
+                }
+                
+                return bestAction;
+            },
+            
+            // Update Q-values
+            update: function(state, action, reward, nextState, done) {
+                const discreteState = this.discretizeState(state);
+                const discreteNextState = this.discretizeState(nextState);
+                
+                // Initialize states if not in Q-table
+                if (!this.qTable[discreteState]) {
+                    this.qTable[discreteState] = [0, 0, 0];
+                }
+                
+                if (!this.qTable[discreteNextState]) {
+                    this.qTable[discreteNextState] = [0, 0, 0];
+                }
+                
+                // Get current Q-value
+                const currentQ = this.qTable[discreteState][action];
+                
+                // Get max Q-value for next state
+                const nextValues = this.qTable[discreteNextState];
+                const maxNextQ = Math.max(...nextValues);
+                
+                // Q-learning update rule
+                let newQ;
+                if (done) {
+                    newQ = currentQ + this.learningRate * (reward - currentQ);
+                } else {
+                    newQ = currentQ + this.learningRate * (reward + this.discountFactor * maxNextQ - currentQ);
+                }
+                
+                // Update Q-table
+                this.qTable[discreteState][action] = newQ;
+            }
+        };
+        
+        // Start training the agent (client-side implementation)
+        async function startTraining() {
+            const episodes = parseInt(document.getElementById('episodes').value) || 100;
+            
+            // Reset RL parameters for fresh training
+            clientRL.explorationRate = 0.3;
+            clientRL.qTable = {};
+            
+            // Show simulation badge
+            gameState.simulation.running = true;
+            document.getElementById('simulation-badge').classList.remove('d-none');
+            document.getElementById('message').textContent = 'Training started. This may take some time...';
+            
+            // Run episodes in sequence
+            let totalReward = 0;
+            let successCount = 0;
+            
+            for (let episode = 0; episode < episodes; episode++) {
+                // Skip if stopped
+                if (!gameState.simulation.running) {
+                    document.getElementById('message').textContent = 'Training stopped.';
+                    break;
+                }
+                
+                // Reset environment
+                await resetEnvironment();
+                let state = gameState.observation;
+                let episodeReward = 0;
+                let stepCount = 0;
+                let done = false;
+                
+                // Run single episode
+                while (!done && stepCount < 100 && gameState.simulation.running) {
+                    // Get action from RL agent
+                    const action = clientRL.getAction(state, true);
+                    
+                    // Take action
+                    await takeStep(action);
+                    
+                    // Get new state and reward
+                    const nextState = gameState.observation;
+                    const reward = gameState.reward;
+                    done = gameState.terminated || gameState.truncated;
+                    
+                    // Update Q-table
+                    clientRL.update(state, action, reward, nextState, done);
+                    
+                    // Update state for next iteration
+                    state = nextState;
+                    episodeReward += reward;
+                    stepCount++;
+                    
+                    // Check if parked successfully
+                    if (done && gameState.info.is_parked) {
+                        successCount++;
+                    }
+                    
+                    // Small delay for visualization
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                
+                totalReward += episodeReward;
+                
+                // Update progress message every 10 episodes
+                if (episode % 10 === 0 || episode === episodes - 1) {
+                    const avgReward = totalReward / (episode + 1);
+                    const successRate = successCount / (episode + 1) * 100;
+                    document.getElementById('message').textContent = 
+                        `Training progress: ${episode+1}/${episodes} episodes, ` +
+                        `Avg Reward: ${avgReward.toFixed(2)}, Success Rate: ${successRate.toFixed(1)}%`;
+                }
+                
+                // Decrease exploration rate over time
+                clientRL.explorationRate = Math.max(0.05, clientRL.explorationRate * 0.95);
+            }
+            
+            // Training complete
+            if (gameState.simulation.running) {
+                document.getElementById('message').textContent = 'Training completed! You can now run the simulation.';
+                // Reduce exploration for evaluation
+                clientRL.explorationRate = 0.05;
+            }
+            
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
+        }
+        
+        // Simulate the trained agent (client-side implementation)
+        async function simulateAgent() {
+            // Reset any ongoing simulation
+            if (gameState.simulation.running) {
+                stopSimulation();
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            gameState.simulation.running = true;
+            document.getElementById('simulation-badge').classList.remove('d-none');
+            document.getElementById('message').textContent = 'RL agent is now driving the car...';
+            
+            // Run 5 episodes of simulation
+            const numEpisodes = 5;
+            let totalReward = 0;
+            let successCount = 0;
+            
+            for (let episode = 0; episode < numEpisodes; episode++) {
+                if (!gameState.simulation.running) break;
+                
+                // Reset environment
+                await resetEnvironment();
+                let state = gameState.observation;
+                let episodeReward = 0;
+                let done = false;
+                
+                // Run single episode
+                while (!done && gameState.simulation.running) {
+                    // Get action from RL agent (no exploration during simulation)
+                    const action = clientRL.getAction(state, false);
+                    
+                    // Take action
+                    await takeStep(action);
+                    
+                    // Get new state and reward
+                    const nextState = gameState.observation;
+                    const reward = gameState.reward;
+                    done = gameState.terminated || gameState.truncated;
+                    
+                    // Update state for next iteration
+                    state = nextState;
+                    episodeReward += reward;
+                    
+                    // Check if parked successfully
+                    if (done && gameState.info.is_parked) {
+                        successCount++;
+                    }
+                    
+                    // Delay for better visualization
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                totalReward += episodeReward;
+                
+                // Brief pause between episodes
+                if (episode < numEpisodes - 1 && gameState.simulation.running) {
+                    document.getElementById('message').textContent = 
+                        `Completed episode ${episode+1}/${numEpisodes}. Starting next episode...`;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            // Simulation complete
+            if (gameState.simulation.running) {
+                const avgReward = totalReward / numEpisodes;
+                const successRate = successCount / numEpisodes * 100;
+                document.getElementById('message').textContent = 
+                    `Simulation completed! Avg Reward: ${avgReward.toFixed(2)}, ` +
+                    `Success Rate: ${successRate.toFixed(0)}%`;
+            }
+            
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
+        }
+        
+        // Stop the simulation
+        function stopSimulation() {
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
+            document.getElementById('message').textContent = 'Simulation stopped.';
+        }
+        
+        // Update the text display
+        function updateTextDisplay(render) {
             document.getElementById('environment-display').textContent = render;
         }
         
-        // Event listeners
+        // Update the canvas display
+        function updateCanvasDisplay(visualData) {
+            if (!visualData) return;
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const padding = 20;
+            const trackHeight = 30;
+            const trackY = canvas.height / 2 - trackHeight / 2;
+            const trackWidth = canvas.width - padding * 2;
+            
+            // Draw the track
+            ctx.fillStyle = '#444';
+            ctx.fillRect(padding, trackY, trackWidth, trackHeight);
+            
+            // Draw the parking zone
+            const parkingZoneStart = padding + visualData.target_zone[0] * trackWidth;
+            const parkingZoneWidth = (visualData.target_zone[1] - visualData.target_zone[0]) * trackWidth;
+            ctx.fillStyle = '#ffc107';  // Bootstrap warning color
+            ctx.fillRect(parkingZoneStart, trackY, parkingZoneWidth, trackHeight);
+            
+            // Draw the car
+            const carWidth = 30;
+            const carHeight = 20;
+            const carX = padding + visualData.car_position * trackWidth - carWidth / 2;
+            const carY = trackY + trackHeight / 2 - carHeight / 2;
+            
+            // Draw car body
+            ctx.fillStyle = '#0d6efd';  // Bootstrap primary color
+            ctx.beginPath();
+            ctx.roundRect(carX, carY, carWidth, carHeight, 5);
+            ctx.fill();
+            
+            // Draw car windows
+            ctx.fillStyle = '#aaddff';
+            ctx.fillRect(carX + 5, carY + 4, 7, 5);
+            ctx.fillRect(carX + 18, carY + 4, 7, 5);
+            
+            // Draw velocity indicator (arrow)
+            const velocityIndicator = document.getElementById('velocity-indicator');
+            const velocityCtx = document.createElement('canvas').getContext('2d');
+            velocityCtx.canvas.width = canvas.width;
+            velocityCtx.canvas.height = canvas.height;
+            
+            const velocity = visualData.car_velocity;
+            const arrowLength = Math.min(Math.abs(velocity) * 50, 100);  // Scale velocity for display
+            
+            if (Math.abs(velocity) > 0.05) {  // Only show arrow if velocity is significant
+                const arrowX = carX + carWidth / 2;
+                const arrowY = carY - 10;
+                const direction = velocity > 0 ? 1 : -1;
+                
+                // Draw the arrow
+                velocityCtx.strokeStyle = velocity > 0 ? '#28a745' : '#dc3545';  // Green for forward, red for backward
+                velocityCtx.lineWidth = 3;
+                velocityCtx.beginPath();
+                velocityCtx.moveTo(arrowX, arrowY);
+                velocityCtx.lineTo(arrowX + direction * arrowLength, arrowY);
+                
+                // Arrow head
+                velocityCtx.lineTo(arrowX + direction * arrowLength - direction * 10, arrowY - 5);
+                velocityCtx.moveTo(arrowX + direction * arrowLength, arrowY);
+                velocityCtx.lineTo(arrowX + direction * arrowLength - direction * 10, arrowY + 5);
+                
+                velocityCtx.stroke();
+                
+                // Update the velocity indicator
+                velocityIndicator.innerHTML = '';
+                velocityIndicator.appendChild(velocityCtx.canvas);
+            } else {
+                velocityIndicator.innerHTML = '';  // Clear when velocity is near zero
+            }
+        }
+        
+        // Mode switching event listeners
+        document.getElementById('manual-mode').addEventListener('click', function() {
+            document.getElementById('manual-controls').style.display = 'block';
+            document.getElementById('training-controls').style.display = 'none';
+            document.getElementById('manual-mode').classList.add('active', 'btn-primary');
+            document.getElementById('manual-mode').classList.remove('btn-secondary');
+            document.getElementById('rl-mode').classList.remove('active', 'btn-primary');
+            document.getElementById('rl-mode').classList.add('btn-secondary');
+            
+            // Stop any running simulation
+            if (gameState.simulation.running) {
+                stopSimulation();
+            }
+            
+            // Reset environment for manual control
+            resetEnvironment();
+        });
+        
+        document.getElementById('rl-mode').addEventListener('click', function() {
+            document.getElementById('manual-controls').style.display = 'none';
+            document.getElementById('training-controls').style.display = 'block';
+            document.getElementById('rl-mode').classList.add('active', 'btn-primary');
+            document.getElementById('rl-mode').classList.remove('btn-secondary');
+            document.getElementById('manual-mode').classList.remove('active', 'btn-primary');
+            document.getElementById('manual-mode').classList.add('btn-secondary');
+            
+            // Reset environment for RL mode
+            resetEnvironment();
+        });
+        
+        // Manual control event listeners
         document.getElementById('reset').addEventListener('click', function() {
             resetEnvironment();
             // Re-enable action buttons
-            document.querySelectorAll('#actions button').forEach(btn => {
+            document.querySelectorAll('#manual-controls button').forEach(btn => {
                 btn.disabled = false;
             });
         });
@@ -192,8 +653,29 @@
             takeStep(2); // Accelerate forward
         });
         
+        // RL agent control event listeners
+        document.getElementById('train-agent').addEventListener('click', startTraining);
+        document.getElementById('simulate-agent').addEventListener('click', simulateAgent);
+        document.getElementById('stop-simulation').addEventListener('click', stopSimulation);
+        
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', resetEnvironment);
+        
+        // Add keyboard controls for manual mode
+        document.addEventListener('keydown', function(event) {
+            // Only process keys if in manual mode
+            if (document.getElementById('manual-controls').style.display !== 'none') {
+                if (event.key === 'a' || event.key === 'A' || event.key === 'ArrowLeft') {
+                    takeStep(0); // Accelerate backward
+                } else if (event.key === 's' || event.key === 'S') {
+                    takeStep(1); // Coast
+                } else if (event.key === 'd' || event.key === 'D' || event.key === 'ArrowRight') {
+                    takeStep(2); // Accelerate forward
+                } else if (event.key === 'r' || event.key === 'R') {
+                    resetEnvironment();
+                }
+            }
+        });
     </script>
 </body>
 </html>
