@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>1D Parking Environment</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+        }
+        #environment-display {
+            font-family: monospace;
+            margin-top: 20px;
+            font-size: 18px;
+            white-space: pre;
+        }
+        #actions {
+            margin-top: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: var(--bs-dark);
+        }
+        .game-container {
+            max-width: 800px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container game-container">
+        <h1>1D Parking Environment</h1>
+        <p class="lead">
+            Use the controls to park the car (C) in the parking zone (P).
+            <br>
+            Try to stop the car within the parking zone with close to zero velocity.
+        </p>
+        
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Controls</h5>
+                <button id="reset" class="btn btn-warning">Reset Environment</button>
+                <div id="actions" class="btn-group" role="group">
+                    <button id="action-0" class="btn btn-primary">Accelerate Backward</button>
+                    <button id="action-1" class="btn btn-secondary">Coast</button>
+                    <button id="action-2" class="btn btn-primary">Accelerate Forward</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="environment-display" class="card p-3 mt-3"></div>
+        
+        <div id="status" class="card mt-3">
+            <h5>Status</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Position:</strong> <span id="position">0.0</span></p>
+                    <p><strong>Velocity:</strong> <span id="velocity">0.0</span></p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Last Reward:</strong> <span id="reward">0.0</span></p>
+                    <p><strong>In Target Zone:</strong> <span id="in-zone">No</span></p>
+                </div>
+            </div>
+            <div class="mt-2">
+                <p><strong>Message:</strong> <span id="message"></span></p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Game state
+        let gameState = {
+            observation: [0, 0],
+            terminated: false,
+            truncated: false,
+            info: {},
+            reward: 0,
+            totalSteps: 0
+        };
+        
+        // Reset the environment
+        async function resetEnvironment() {
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                gameState.observation = data.observation;
+                gameState.info = data.info;
+                gameState.terminated = false;
+                gameState.truncated = false;
+                gameState.reward = 0;
+                gameState.totalSteps = 0;
+                
+                document.getElementById('message').textContent = 'Environment reset. Good luck!';
+                
+                // Take a null step to get the initial render
+                await takeStep(1); // Coast on first step
+            } catch (error) {
+                console.error('Error resetting environment:', error);
+                document.getElementById('message').textContent = 'Error resetting environment.';
+            }
+        }
+        
+        // Take a step in the environment
+        async function takeStep(action) {
+            if (gameState.terminated || gameState.truncated) {
+                document.getElementById('message').textContent = 'Game over. Reset to start a new game.';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/step', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action })
+                });
+                
+                const data = await response.json();
+                
+                gameState.observation = data.observation;
+                gameState.reward = data.reward;
+                gameState.terminated = data.terminated;
+                gameState.truncated = data.truncated;
+                gameState.info = data.info;
+                gameState.totalSteps++;
+                
+                // Update display
+                updateDisplay(data.render);
+                
+                // Update status
+                document.getElementById('position').textContent = data.observation[0].toFixed(2);
+                document.getElementById('velocity').textContent = data.observation[1].toFixed(2);
+                document.getElementById('reward').textContent = data.reward.toFixed(2);
+                document.getElementById('in-zone').textContent = data.info.in_target_zone ? 'Yes' : 'No';
+                
+                // Game over check
+                if (data.terminated || data.truncated) {
+                    let message = '';
+                    if (data.info.is_parked) {
+                        message = 'Success! Car parked correctly.';
+                    } else if (data.observation[0] <= -5 || data.observation[0] >= 5) {
+                        message = 'Crashed! Car went out of bounds.';
+                    } else {
+                        message = 'Time limit reached without parking.';
+                    }
+                    document.getElementById('message').textContent = message;
+                    
+                    // Disable action buttons
+                    document.querySelectorAll('#actions button').forEach(btn => {
+                        btn.disabled = true;
+                    });
+                }
+            } catch (error) {
+                console.error('Error taking step:', error);
+                document.getElementById('message').textContent = 'Error taking step in environment.';
+            }
+        }
+        
+        // Update the environment display
+        function updateDisplay(render) {
+            document.getElementById('environment-display').textContent = render;
+        }
+        
+        // Event listeners
+        document.getElementById('reset').addEventListener('click', function() {
+            resetEnvironment();
+            // Re-enable action buttons
+            document.querySelectorAll('#actions button').forEach(btn => {
+                btn.disabled = false;
+            });
+        });
+        
+        document.getElementById('action-0').addEventListener('click', function() {
+            takeStep(0); // Accelerate backward
+        });
+        
+        document.getElementById('action-1').addEventListener('click', function() {
+            takeStep(1); // Coast
+        });
+        
+        document.getElementById('action-2').addEventListener('click', function() {
+            takeStep(2); // Accelerate forward
+        });
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', resetEnvironment);
+    </script>
+</body>
+</html>
