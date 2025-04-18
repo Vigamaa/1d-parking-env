@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>1D Parking Environment - Manual Play</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+        }
+        .environment-text {
+            font-family: monospace;
+            font-size: 18px;
+            white-space: pre;
+            margin-bottom: 15px;
+        }
+        .control-section {
+            margin-top: 20px;
+        }
+        .status-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: var(--bs-dark);
+            border-radius: 5px;
+        }
+        .game-container {
+            max-width: 900px;
+        }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            margin-bottom: 10px;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background-color: var(--bs-dark);
+            border-radius: 5px;
+        }
+        .velocity-indicator {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .instructions {
+            margin-bottom: 20px;
+        }
+        .nav-buttons {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container game-container">
+        <div class="nav-buttons">
+            <a href="/" class="btn btn-secondary">← Back to Main Menu</a>
+        </div>
+        
+        <h1>Manual Play Mode</h1>
+        <p class="lead">
+            Take control of the car and try to park it perfectly in the parking zone (P).
+        </p>
+        
+        <div class="instructions alert alert-info">
+            <h5><i class="bi bi-info-circle"></i> How to Play:</h5>
+            <p>
+                <strong>Goal:</strong> Stop the car (C) inside the parking zone (P) with minimal velocity.<br>
+                <strong>Controls:</strong>
+                <ul>
+                    <li>Use buttons below or keyboard keys:</li>
+                    <li>A or ⬅️: Accelerate backward</li>
+                    <li>S: Coast (no acceleration)</li>
+                    <li>D or ➡️: Accelerate forward</li>
+                    <li>R: Reset environment</li>
+                </ul>
+            </p>
+        </div>
+        
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Manual Controls</h5>
+                <button id="reset" class="btn btn-warning">Reset Environment</button>
+                <div class="btn-group mt-3" role="group">
+                    <button id="action-0" class="btn btn-primary">⬅️ Accelerate Backward</button>
+                    <button id="action-1" class="btn btn-secondary">Coast</button>
+                    <button id="action-2" class="btn btn-primary">Accelerate Forward ➡️</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Environment Visualization</h5>
+                <div class="canvas-container">
+                    <canvas id="env-canvas"></canvas>
+                    <div class="velocity-indicator" id="velocity-indicator"></div>
+                </div>
+                <div id="environment-display" class="environment-text"></div>
+            </div>
+        </div>
+        
+        <div id="status" class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Status</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Position:</strong> <span id="position">0.0</span></p>
+                        <p><strong>Velocity:</strong> <span id="velocity">0.0</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Last Reward:</strong> <span id="reward">0.0</span></p>
+                        <p><strong>In Target Zone:</strong> <span id="in-zone">No</span></p>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-2" role="alert">
+                    <p><strong>Message:</strong> <span id="message">Initialize the environment to begin.</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Game state
+        let gameState = {
+            observation: [0, 0],
+            terminated: false,
+            truncated: false,
+            info: {},
+            reward: 0,
+            totalSteps: 0
+        };
+        
+        // Canvas setup
+        const canvas = document.getElementById('env-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas dimensions for proper resolution
+        function resizeCanvas() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+        }
+        
+        // Initial resize and listen for window resize
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Reset the environment
+        async function resetEnvironment() {
+            try {
+                const response = await fetch('/api/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                const data = await response.json();
+                gameState.observation = data.observation;
+                gameState.info = data.info;
+                gameState.terminated = false;
+                gameState.truncated = false;
+                gameState.reward = 0;
+                gameState.totalSteps = 0;
+                
+                document.getElementById('message').textContent = 'Environment reset. Good luck!';
+                
+                // Take a null step to get the initial render
+                await takeStep(1); // Coast on first step
+            } catch (error) {
+                console.error('Error resetting environment:', error);
+                document.getElementById('message').textContent = 'Error resetting environment.';
+            }
+        }
+        
+        // Take a step in the environment
+        async function takeStep(action) {
+            if (gameState.terminated || gameState.truncated) {
+                document.getElementById('message').textContent = 'Game over. Reset to start a new game.';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/step', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action })
+                });
+                
+                const data = await response.json();
+                
+                gameState.observation = data.observation;
+                gameState.reward = data.reward;
+                gameState.terminated = data.terminated;
+                gameState.truncated = data.truncated;
+                gameState.info = data.info;
+                gameState.totalSteps++;
+                
+                // Update both displays
+                updateTextDisplay(data.render);
+                updateCanvasDisplay(data.visual_data);
+                
+                // Update status
+                document.getElementById('position').textContent = data.observation[0].toFixed(2);
+                document.getElementById('velocity').textContent = data.observation[1].toFixed(2);
+                document.getElementById('reward').textContent = data.reward.toFixed(2);
+                document.getElementById('in-zone').textContent = data.info.in_target_zone ? 'Yes' : 'No';
+                
+                // Game over check
+                if (data.terminated || data.truncated) {
+                    let message = '';
+                    if (data.info.is_parked) {
+                        message = 'Success! Car parked correctly.';
+                    } else if (data.observation[0] <= -5 || data.observation[0] >= 5) {
+                        message = 'Crashed! Car went out of bounds.';
+                    } else {
+                        message = 'Time limit reached without parking.';
+                    }
+                    document.getElementById('message').textContent = message;
+                    
+                    // Disable action buttons
+                    document.querySelectorAll('button').forEach(btn => {
+                        if (btn.id !== 'reset') {
+                            btn.disabled = true;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error taking step:', error);
+                document.getElementById('message').textContent = 'Error taking step in environment.';
+            }
+        }
+        
+        // Update the text display
+        function updateTextDisplay(render) {
+            document.getElementById('environment-display').textContent = render;
+        }
+        
+        // Update the canvas display
+        function updateCanvasDisplay(visualData) {
+            if (!visualData) return;
+            
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const padding = 20;
+            const trackHeight = 30;
+            const trackY = canvas.height / 2 - trackHeight / 2;
+            const trackWidth = canvas.width - padding * 2;
+            
+            // Draw the track
+            ctx.fillStyle = '#444';
+            ctx.fillRect(padding, trackY, trackWidth, trackHeight);
+            
+            // Draw the parking zone
+            const parkingZoneStart = padding + visualData.target_zone[0] * trackWidth;
+            const parkingZoneWidth = (visualData.target_zone[1] - visualData.target_zone[0]) * trackWidth;
+            ctx.fillStyle = '#ffc107';  // Bootstrap warning color
+            ctx.fillRect(parkingZoneStart, trackY, parkingZoneWidth, trackHeight);
+            
+            // Draw the car
+            const carWidth = 30;
+            const carHeight = 20;
+            const carX = padding + visualData.car_position * trackWidth - carWidth / 2;
+            const carY = trackY + trackHeight / 2 - carHeight / 2;
+            
+            // Draw car body
+            ctx.fillStyle = '#0d6efd';  // Bootstrap primary color
+            ctx.beginPath();
+            ctx.roundRect(carX, carY, carWidth, carHeight, 5);
+            ctx.fill();
+            
+            // Draw car windows
+            ctx.fillStyle = '#aaddff';
+            ctx.fillRect(carX + 5, carY + 4, 7, 5);
+            ctx.fillRect(carX + 18, carY + 4, 7, 5);
+            
+            // Draw velocity indicator (arrow)
+            const velocityIndicator = document.getElementById('velocity-indicator');
+            const velocityCtx = document.createElement('canvas').getContext('2d');
+            velocityCtx.canvas.width = canvas.width;
+            velocityCtx.canvas.height = canvas.height;
+            
+            const velocity = visualData.car_velocity;
+            const arrowLength = Math.min(Math.abs(velocity) * 50, 100);  // Scale velocity for display
+            
+            if (Math.abs(velocity) > 0.05) {  // Only show arrow if velocity is significant
+                const arrowX = carX + carWidth / 2;
+                const arrowY = carY - 10;
+                const direction = velocity > 0 ? 1 : -1;
+                
+                // Draw the arrow
+                velocityCtx.strokeStyle = velocity > 0 ? '#28a745' : '#dc3545';  // Green for forward, red for backward
+                velocityCtx.lineWidth = 3;
+                velocityCtx.beginPath();
+                velocityCtx.moveTo(arrowX, arrowY);
+                velocityCtx.lineTo(arrowX + direction * arrowLength, arrowY);
+                
+                // Arrow head
+                velocityCtx.lineTo(arrowX + direction * arrowLength - direction * 10, arrowY - 5);
+                velocityCtx.moveTo(arrowX + direction * arrowLength, arrowY);
+                velocityCtx.lineTo(arrowX + direction * arrowLength - direction * 10, arrowY + 5);
+                
+                velocityCtx.stroke();
+                
+                // Update the velocity indicator
+                velocityIndicator.innerHTML = '';
+                velocityIndicator.appendChild(velocityCtx.canvas);
+            } else {
+                velocityIndicator.innerHTML = '';  // Clear when velocity is near zero
+            }
+        }
+        
+        // Manual control event listeners
+        document.getElementById('reset').addEventListener('click', function() {
+            resetEnvironment();
+            // Re-enable action buttons
+            document.querySelectorAll('button').forEach(btn => {
+                btn.disabled = false;
+            });
+        });
+        
+        document.getElementById('action-0').addEventListener('click', function() {
+            takeStep(0); // Accelerate backward
+        });
+        
+        document.getElementById('action-1').addEventListener('click', function() {
+            takeStep(1); // Coast
+        });
+        
+        document.getElementById('action-2').addEventListener('click', function() {
+            takeStep(2); // Accelerate forward
+        });
+        
+        // Add keyboard controls
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'a' || event.key === 'A' || event.key === 'ArrowLeft') {
+                takeStep(0); // Accelerate backward
+            } else if (event.key === 's' || event.key === 'S') {
+                takeStep(1); // Coast
+            } else if (event.key === 'd' || event.key === 'D' || event.key === 'ArrowRight') {
+                takeStep(2); // Accelerate forward
+            } else if (event.key === 'r' || event.key === 'R') {
+                resetEnvironment();
+            }
+        });
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', resetEnvironment);
+    </script>
+</body>
+</html>

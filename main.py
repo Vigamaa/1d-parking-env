@@ -19,7 +19,17 @@ simulation_running = False
 @app.route('/')
 def index():
     """Main page handler."""
-    return render_template('index.html')
+    return render_template('main_page.html')
+
+@app.route('/manual')
+def manual_play():
+    """Manual play mode."""
+    return render_template('manual_play.html')
+
+@app.route('/simulation')
+def rl_simulation():
+    """RL simulation mode."""
+    return render_template('rl_simulation.html')
 
 @app.route('/api/reset', methods=['POST'])
 def reset_env():

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>1D Parking Environment</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: var(--bs-dark);
+            color: var(--bs-light);
+        }
+        .main-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .mode-card {
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin-bottom: 20px;
+            border: 2px solid transparent;
+        }
+        .mode-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            border-color: var(--bs-primary);
+        }
+        .card-img-top {
+            height: 200px;
+            object-fit: cover;
+            background-color: var(--bs-gray-700);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+        }
+        .btn-mode {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="header">
+            <h1>1D Parking Environment</h1>
+            <p class="lead">
+                A simple environment for reinforcement learning where an agent controls a car that needs to park in a designated zone.
+            </p>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card mode-card">
+                    <div class="card-img-top bg-info text-center">
+                        <i>🎮</i>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">Manual Play Mode</h5>
+                        <p class="card-text">
+                            Control the car manually using keyboard controls:
+                            <ul>
+                                <li>A or ⬅️: Accelerate backward</li>
+                                <li>S: Coast (no acceleration)</li>
+                                <li>D or ➡️: Accelerate forward</li>
+                            </ul>
+                            Try to park the car precisely in the parking zone!
+                        </p>
+                        <a href="/manual" class="btn btn-primary btn-mode">Play Manually</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card mode-card">
+                    <div class="card-img-top bg-success text-center">
+                        <i>🤖</i>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title">RL Simulation Mode</h5>
+                        <p class="card-text">
+                            Watch a reinforcement learning agent train itself to park the car:
+                            <ul>
+                                <li>Train Agent: Learn through trial and error</li>
+                                <li>Simulate: Watch the trained agent perform</li>
+                                <li>Compare performance with your own skills!</li>
+                            </ul>
+                        </p>
+                        <a href="/simulation" class="btn btn-success btn-mode">RL Simulation</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">About This Project</h5>
+                <p>
+                    This is a 1D Parking Environment where a car moves along a straight line and needs to stop within a predefined parking zone. The car has a continuous state space (position and velocity) and three possible actions (accelerate backward, coast, or accelerate forward).
+                </p>
+                <p>
+                    The environment follows Gymnasium standards and can be used for reinforcement learning experimentation. The Q-learning agent demonstrates how a computer can learn to solve this problem through trial and error.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
