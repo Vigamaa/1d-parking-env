@@ -373,6 +373,9 @@ if __name__ == '__main__':
                         <button id="rl-mode" class="btn btn-secondary">RL Simulation</button>
                     </div>
                     <span id="simulation-badge" class="badge bg-success d-none">Simulation Running</span>
+                    <div class="alert alert-info mt-3">
+                        <strong>Tip:</strong> Click "RL Simulation" to switch to the AI agent mode!
+                    </div>
                 </div>
                 
                 <div id="manual-controls" class="manual-controls">
@@ -551,129 +554,263 @@ if __name__ == '__main__':
             }
         }
         
-        // Start training the agent
-        async function startTraining() {
-            try {
-                const episodes = parseInt(document.getElementById('episodes').value) || 100;
+        // Simple client-side implementation of Q-learning
+        const clientRL = {
+            // Parameters
+            learningRate: 0.1,         // Alpha
+            discountFactor: 0.99,      // Gamma
+            explorationRate: 0.3,      // Epsilon
+            positionBins: 10,          // Number of discrete position bins
+            velocityBins: 10,          // Number of discrete velocity bins
+            qTable: {},                // Q-table (state -> [action values])
+            
+            // Discretize state for Q-table lookup
+            discretizeState: function(state) {
+                // Map position from [-5,5] to [0,positionBins-1]
+                const position = state[0];
+                const positionRange = 10; // -5 to 5 = 10 units
+                let posBin = Math.floor((position + 5) / positionRange * this.positionBins);
+                posBin = Math.max(0, Math.min(this.positionBins - 1, posBin));
                 
-                const response = await fetch('/api/train', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ episodes })
-                });
+                // Map velocity from [-2,2] to [0,velocityBins-1]
+                const velocity = state[1];
+                const velocityRange = 4; // -2 to 2 = 4 units
+                let velBin = Math.floor((velocity + 2) / velocityRange * this.velocityBins);
+                velBin = Math.max(0, Math.min(this.velocityBins - 1, velBin));
                 
-                const data = await response.json();
+                return `${posBin},${velBin}`;
+            },
+            
+            // Get action using epsilon-greedy policy
+            getAction: function(state, training = true) {
+                const discreteState = this.discretizeState(state);
                 
-                if (data.status === 'Training started') {
-                    gameState.simulation.running = true;
-                    document.getElementById('simulation-badge').classList.remove('d-none');
-                    document.getElementById('message').textContent = 'Training started. This may take some time...';
-                    
-                    // Start polling for state updates
-                    startStatePolling();
+                // Explore: choose random action
+                if (training && Math.random() < this.explorationRate) {
+                    return Math.floor(Math.random() * 3); // Random action (0, 1, or 2)
                 }
-            } catch (error) {
-                console.error('Error starting training:', error);
-                document.getElementById('message').textContent = 'Error starting training.';
+                
+                // Initialize state if not in Q-table
+                if (!this.qTable[discreteState]) {
+                    this.qTable[discreteState] = [0, 0, 0];
+                }
+                
+                // Exploit: choose best action
+                const actionValues = this.qTable[discreteState];
+                let maxValue = actionValues[0];
+                let bestAction = 0;
+                
+                for (let i = 1; i < actionValues.length; i++) {
+                    if (actionValues[i] > maxValue) {
+                        maxValue = actionValues[i];
+                        bestAction = i;
+                    }
+                }
+                
+                return bestAction;
+            },
+            
+            // Update Q-values
+            update: function(state, action, reward, nextState, done) {
+                const discreteState = this.discretizeState(state);
+                const discreteNextState = this.discretizeState(nextState);
+                
+                // Initialize states if not in Q-table
+                if (!this.qTable[discreteState]) {
+                    this.qTable[discreteState] = [0, 0, 0];
+                }
+                
+                if (!this.qTable[discreteNextState]) {
+                    this.qTable[discreteNextState] = [0, 0, 0];
+                }
+                
+                // Get current Q-value
+                const currentQ = this.qTable[discreteState][action];
+                
+                // Get max Q-value for next state
+                const nextValues = this.qTable[discreteNextState];
+                const maxNextQ = Math.max(...nextValues);
+                
+                // Q-learning update rule
+                let newQ;
+                if (done) {
+                    newQ = currentQ + this.learningRate * (reward - currentQ);
+                } else {
+                    newQ = currentQ + this.learningRate * (reward + this.discountFactor * maxNextQ - currentQ);
+                }
+                
+                // Update Q-table
+                this.qTable[discreteState][action] = newQ;
             }
+        };
+        
+        // Start training the agent (client-side implementation)
+        async function startTraining() {
+            const episodes = parseInt(document.getElementById('episodes').value) || 100;
+            
+            // Reset RL parameters for fresh training
+            clientRL.explorationRate = 0.3;
+            clientRL.qTable = {};
+            
+            // Show simulation badge
+            gameState.simulation.running = true;
+            document.getElementById('simulation-badge').classList.remove('d-none');
+            document.getElementById('message').textContent = 'Training started. This may take some time...';
+            
+            // Run episodes in sequence
+            let totalReward = 0;
+            let successCount = 0;
+            
+            for (let episode = 0; episode < episodes; episode++) {
+                // Skip if stopped
+                if (!gameState.simulation.running) {
+                    document.getElementById('message').textContent = 'Training stopped.';
+                    break;
+                }
+                
+                // Reset environment
+                await resetEnvironment();
+                let state = gameState.observation;
+                let episodeReward = 0;
+                let stepCount = 0;
+                let done = false;
+                
+                // Run single episode
+                while (!done && stepCount < 100 && gameState.simulation.running) {
+                    // Get action from RL agent
+                    const action = clientRL.getAction(state, true);
+                    
+                    // Take action
+                    await takeStep(action);
+                    
+                    // Get new state and reward
+                    const nextState = gameState.observation;
+                    const reward = gameState.reward;
+                    done = gameState.terminated || gameState.truncated;
+                    
+                    // Update Q-table
+                    clientRL.update(state, action, reward, nextState, done);
+                    
+                    // Update state for next iteration
+                    state = nextState;
+                    episodeReward += reward;
+                    stepCount++;
+                    
+                    // Check if parked successfully
+                    if (done && gameState.info.is_parked) {
+                        successCount++;
+                    }
+                    
+                    // Small delay for visualization
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+                
+                totalReward += episodeReward;
+                
+                // Update progress message every 10 episodes
+                if (episode % 10 === 0 || episode === episodes - 1) {
+                    const avgReward = totalReward / (episode + 1);
+                    const successRate = successCount / (episode + 1) * 100;
+                    document.getElementById('message').textContent = 
+                        `Training progress: ${episode+1}/${episodes} episodes, ` +
+                        `Avg Reward: ${avgReward.toFixed(2)}, Success Rate: ${successRate.toFixed(1)}%`;
+                }
+                
+                // Decrease exploration rate over time
+                clientRL.explorationRate = Math.max(0.05, clientRL.explorationRate * 0.95);
+            }
+            
+            // Training complete
+            if (gameState.simulation.running) {
+                document.getElementById('message').textContent = 'Training completed! You can now run the simulation.';
+                // Reduce exploration for evaluation
+                clientRL.explorationRate = 0.05;
+            }
+            
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
         }
         
-        // Simulate the trained agent
+        // Simulate the trained agent (client-side implementation)
         async function simulateAgent() {
-            try {
-                const response = await fetch('/api/simulate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({})
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'Simulation started') {
-                    gameState.simulation.running = true;
-                    document.getElementById('simulation-badge').classList.remove('d-none');
-                    document.getElementById('message').textContent = 'RL agent is now driving the car.';
-                    
-                    // Start polling for state updates
-                    startStatePolling();
-                }
-            } catch (error) {
-                console.error('Error starting simulation:', error);
-                document.getElementById('message').textContent = 'Error starting simulation.';
+            // Reset any ongoing simulation
+            if (gameState.simulation.running) {
+                stopSimulation();
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
+            
+            gameState.simulation.running = true;
+            document.getElementById('simulation-badge').classList.remove('d-none');
+            document.getElementById('message').textContent = 'RL agent is now driving the car...';
+            
+            // Run 5 episodes of simulation
+            const numEpisodes = 5;
+            let totalReward = 0;
+            let successCount = 0;
+            
+            for (let episode = 0; episode < numEpisodes; episode++) {
+                if (!gameState.simulation.running) break;
+                
+                // Reset environment
+                await resetEnvironment();
+                let state = gameState.observation;
+                let episodeReward = 0;
+                let done = false;
+                
+                // Run single episode
+                while (!done && gameState.simulation.running) {
+                    // Get action from RL agent (no exploration during simulation)
+                    const action = clientRL.getAction(state, false);
+                    
+                    // Take action
+                    await takeStep(action);
+                    
+                    // Get new state and reward
+                    const nextState = gameState.observation;
+                    const reward = gameState.reward;
+                    done = gameState.terminated || gameState.truncated;
+                    
+                    // Update state for next iteration
+                    state = nextState;
+                    episodeReward += reward;
+                    
+                    // Check if parked successfully
+                    if (done && gameState.info.is_parked) {
+                        successCount++;
+                    }
+                    
+                    // Delay for better visualization
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                totalReward += episodeReward;
+                
+                // Brief pause between episodes
+                if (episode < numEpisodes - 1 && gameState.simulation.running) {
+                    document.getElementById('message').textContent = 
+                        `Completed episode ${episode+1}/${numEpisodes}. Starting next episode...`;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            // Simulation complete
+            if (gameState.simulation.running) {
+                const avgReward = totalReward / numEpisodes;
+                const successRate = successCount / numEpisodes * 100;
+                document.getElementById('message').textContent = 
+                    `Simulation completed! Avg Reward: ${avgReward.toFixed(2)}, ` +
+                    `Success Rate: ${successRate.toFixed(0)}%`;
+            }
+            
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
         }
         
         // Stop the simulation
-        async function stopSimulation() {
-            try {
-                const response = await fetch('/api/stop', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({})
-                });
-                
-                const data = await response.json();
-                
-                if (data.status === 'Simulation stopping') {
-                    gameState.simulation.running = false;
-                    document.getElementById('simulation-badge').classList.add('d-none');
-                    document.getElementById('message').textContent = 'Simulation stopped.';
-                    
-                    // Stop polling
-                    stopStatePolling();
-                }
-            } catch (error) {
-                console.error('Error stopping simulation:', error);
-            }
-        }
-        
-        // Start polling for state updates
-        function startStatePolling() {
-            // Clear any existing polling
-            stopStatePolling();
-            
-            // Start a new polling interval
-            gameState.simulation.interval = setInterval(pollState, 100);
-        }
-        
-        // Stop polling for state updates
-        function stopStatePolling() {
-            if (gameState.simulation.interval) {
-                clearInterval(gameState.simulation.interval);
-                gameState.simulation.interval = null;
-            }
-        }
-        
-        // Poll the current state of the environment
-        async function pollState() {
-            try {
-                const response = await fetch('/api/state');
-                const data = await response.json();
-                
-                // Check if simulation is still running
-                if (!data.simulation_running) {
-                    gameState.simulation.running = false;
-                    document.getElementById('simulation-badge').classList.add('d-none');
-                    stopStatePolling();
-                    document.getElementById('message').textContent = 'Simulation completed.';
-                } else {
-                    // Update displays with current state
-                    updateTextDisplay(data.render);
-                    updateCanvasDisplay(data.visual_data);
-                    
-                    // Update status
-                    document.getElementById('position').textContent = data.observation[0].toFixed(2);
-                    document.getElementById('velocity').textContent = data.observation[1].toFixed(2);
-                }
-            } catch (error) {
-                console.error('Error polling state:', error);
-            }
+        function stopSimulation() {
+            gameState.simulation.running = false;
+            document.getElementById('simulation-badge').classList.add('d-none');
+            document.getElementById('message').textContent = 'Simulation stopped.';
         }
         
         // Update the text display
