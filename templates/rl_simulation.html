@@ -126,6 +126,68 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Learning Progress Metrics -->
+        <div id="learning-metrics" class="card mt-3">
+            <div class="card-body">
+                <h5 class="card-title">Learning Progress</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">Training Statistics</h6>
+                                <table class="table table-sm table-dark">
+                                    <tbody>
+                                        <tr>
+                                            <td>Episodes Completed:</td>
+                                            <td id="episodes-completed">0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Success Rate:</td>
+                                            <td id="success-rate">0%</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Avg. Reward:</td>
+                                            <td id="avg-reward">0.0</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Exploration Rate (ε):</td>
+                                            <td id="exploration-rate">0.3</td>
+                                        </tr>
+                                        <tr>
+                                            <td>States Discovered:</td>
+                                            <td id="states-discovered">0</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-dark">
+                            <div class="card-body">
+                                <h6 class="card-subtitle mb-2 text-muted">Learning Progress</h6>
+                                <div class="progress mb-2" style="height: 20px;">
+                                    <div id="learning-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                                </div>
+                                <p class="small">The agent is considered trained when it achieves >80% success rate.</p>
+                                <div id="learning-status" class="alert alert-secondary">
+                                    <strong>Learning Status:</strong> Not started
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Last 10 Episodes Results -->
+                <div class="mt-3">
+                    <h6>Last 10 Episodes</h6>
+                    <div class="d-flex justify-content-between" id="episode-results" style="height: 30px;">
+                        <!-- Will be filled dynamically with episode results -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script>
@@ -315,6 +377,98 @@
             }
         }
         
+        // Training metrics
+        const trainingMetrics = {
+            episodesCompleted: 0,
+            successCount: 0,
+            totalReward: 0,
+            recentEpisodes: [], // Store results of last 10 episodes (success/fail)
+            
+            // Update metrics display
+            updateDisplay: function() {
+                // Calculate metrics
+                const successRate = this.episodesCompleted > 0 ? 
+                    (this.successCount / this.episodesCompleted) * 100 : 0;
+                
+                const avgReward = this.episodesCompleted > 0 ? 
+                    this.totalReward / this.episodesCompleted : 0;
+                
+                const statesDiscovered = Object.keys(clientRL.qTable).length;
+                
+                // Update basic stats
+                document.getElementById('episodes-completed').textContent = this.episodesCompleted;
+                document.getElementById('success-rate').textContent = `${successRate.toFixed(1)}%`;
+                document.getElementById('avg-reward').textContent = avgReward.toFixed(2);
+                document.getElementById('exploration-rate').textContent = clientRL.explorationRate.toFixed(3);
+                document.getElementById('states-discovered').textContent = statesDiscovered;
+                
+                // Update progress bar
+                const progressBar = document.getElementById('learning-progress-bar');
+                const progressValue = Math.min(100, Math.floor(successRate));
+                progressBar.style.width = `${progressValue}%`;
+                progressBar.textContent = `${progressValue}%`;
+                progressBar.setAttribute('aria-valuenow', progressValue);
+                
+                // Update learning status
+                const learningStatus = document.getElementById('learning-status');
+                if (successRate >= 80) {
+                    learningStatus.className = 'alert alert-success';
+                    learningStatus.innerHTML = '<strong>Learning Status:</strong> Fully Trained! The agent has mastered parking.';
+                } else if (successRate >= 50) {
+                    learningStatus.className = 'alert alert-warning';
+                    learningStatus.innerHTML = '<strong>Learning Status:</strong> Learning Well! The agent is getting better.';
+                } else if (successRate > 0) {
+                    learningStatus.className = 'alert alert-info';
+                    learningStatus.innerHTML = '<strong>Learning Status:</strong> Learning in Progress...';
+                } else {
+                    learningStatus.className = 'alert alert-secondary';
+                    learningStatus.innerHTML = '<strong>Learning Status:</strong> ' + 
+                        (this.episodesCompleted > 0 ? 'Struggling to Learn' : 'Not Started');
+                }
+                
+                // Update episode results visualization
+                this.updateEpisodeResults();
+            },
+            
+            // Add a new episode result
+            addEpisodeResult: function(success) {
+                // Add to recent episodes list
+                this.recentEpisodes.push(success);
+                // Keep only last 10
+                if (this.recentEpisodes.length > 10) {
+                    this.recentEpisodes.shift();
+                }
+                
+                this.updateEpisodeResults();
+            },
+            
+            // Update episode results visualization
+            updateEpisodeResults: function() {
+                const container = document.getElementById('episode-results');
+                container.innerHTML = '';
+                
+                // Create a box for each episode result
+                this.recentEpisodes.forEach((success, index) => {
+                    const box = document.createElement('div');
+                    box.className = success ? 'bg-success' : 'bg-danger';
+                    box.style.width = '8%';
+                    box.style.height = '100%';
+                    box.style.marginRight = '2%';
+                    box.title = `Episode ${this.episodesCompleted - this.recentEpisodes.length + index + 1}: ${success ? 'Success' : 'Failure'}`;
+                    container.appendChild(box);
+                });
+            },
+            
+            // Reset all metrics
+            reset: function() {
+                this.episodesCompleted = 0;
+                this.successCount = 0;
+                this.totalReward = 0;
+                this.recentEpisodes = [];
+                this.updateDisplay();
+            }
+        };
+        
         // Start training the agent (client-side implementation)
         async function startTraining() {
             // Stop any existing simulation
@@ -329,6 +483,9 @@
             clientRL.explorationRate = 0.3;
             clientRL.qTable = {};
             
+            // Reset training metrics
+            trainingMetrics.reset();
+            
             // Show simulation badge
             gameState.simulation.running = true;
             document.getElementById('simulation-badge').classList.remove('d-none');
@@ -337,8 +494,8 @@
             document.getElementById('simulate-agent').disabled = true;
             
             // Run episodes in sequence
-            let totalReward = 0;
-            let successCount = 0;
+            let episodeSuccesses = 0;
+            let lastSuccessEpisode = 0;
             
             for (let episode = 0; episode < episodes; episode++) {
                 // Skip if stopped
@@ -353,6 +510,7 @@
                 let episodeReward = 0;
                 let stepCount = 0;
                 let done = false;
+                let episodeSuccess = false;
                 
                 // Run single episode
                 while (!done && stepCount < 100 && gameState.simulation.running) {
@@ -377,31 +535,77 @@
                     
                     // Check if parked successfully
                     if (done && gameState.info.is_parked) {
-                        successCount++;
+                        episodeSuccess = true;
+                        episodeSuccesses++;
+                        lastSuccessEpisode = episode;
                     }
                     
                     // Small delay for visualization
                     await new Promise(resolve => setTimeout(resolve, 50));
                 }
                 
-                totalReward += episodeReward;
+                // Update training metrics
+                trainingMetrics.episodesCompleted++;
+                trainingMetrics.totalReward += episodeReward;
+                if (episodeSuccess) {
+                    trainingMetrics.successCount++;
+                }
+                trainingMetrics.addEpisodeResult(episodeSuccess);
+                trainingMetrics.updateDisplay();
                 
-                // Update progress message every 10 episodes
-                if (episode % 10 === 0 || episode === episodes - 1) {
-                    const avgReward = totalReward / (episode + 1);
-                    const successRate = successCount / (episode + 1) * 100;
+                // Update progress message every 5 episodes
+                if (episode % 5 === 0 || episode === episodes - 1) {
+                    const avgReward = trainingMetrics.totalReward / trainingMetrics.episodesCompleted;
+                    const successRate = episodeSuccesses / (episode + 1) * 100;
                     document.getElementById('message').textContent = 
                         `Training progress: ${episode+1}/${episodes} episodes, ` +
                         `Avg Reward: ${avgReward.toFixed(2)}, Success Rate: ${successRate.toFixed(1)}%`;
+                    
+                    // Check if agent has mastered the task early
+                    const recentSuccessRate = trainingMetrics.recentEpisodes.filter(success => success).length / 
+                                            Math.min(10, trainingMetrics.recentEpisodes.length);
+                    
+                    if (recentSuccessRate >= 0.8 && trainingMetrics.recentEpisodes.length >= 5) {
+                        document.getElementById('message').textContent += " - Agent has mastered parking!";
+                        if (episode >= episodes * 0.75) {
+                            // If we're near the end anyway, just finish normally
+                            continue;
+                        }
+                        // Early stopping option
+                        break;
+                    }
                 }
                 
-                // Decrease exploration rate over time
-                clientRL.explorationRate = Math.max(0.05, clientRL.explorationRate * 0.95);
+                // Analyze if agent is making progress
+                if (episode > 20 && episode - lastSuccessEpisode > 15) {
+                    // Agent hasn't succeeded in a while, might be stuck
+                    // Boost exploration temporarily
+                    clientRL.explorationRate = Math.min(0.6, clientRL.explorationRate * 1.5);
+                    console.log("Agent appears stuck - increasing exploration to", clientRL.explorationRate);
+                } else {
+                    // Normal exploration decay
+                    clientRL.explorationRate = Math.max(0.05, clientRL.explorationRate * 0.98);
+                }
             }
             
             // Training complete
             if (gameState.simulation.running) {
-                document.getElementById('message').textContent = 'Training completed! You can now run the simulation.';
+                const finalSuccessRate = (trainingMetrics.successCount / trainingMetrics.episodesCompleted) * 100;
+                
+                if (finalSuccessRate >= 80) {
+                    document.getElementById('message').textContent = 
+                        `Training complete! The agent has mastered parking with a ${finalSuccessRate.toFixed(1)}% success rate.`;
+                } else if (finalSuccessRate >= 50) {
+                    document.getElementById('message').textContent = 
+                        `Training complete! The agent has become reasonably good at parking with a ${finalSuccessRate.toFixed(1)}% success rate.`;
+                } else if (finalSuccessRate > 0) {
+                    document.getElementById('message').textContent = 
+                        `Training complete! The agent has learned something, but still struggles with a ${finalSuccessRate.toFixed(1)}% success rate.`;
+                } else {
+                    document.getElementById('message').textContent = 
+                        `Training complete! The agent hasn't learned to park successfully yet. Try more episodes or adjusting parameters.`;
+                }
+                
                 // Reduce exploration for evaluation
                 clientRL.explorationRate = 0.05;
             }
@@ -420,6 +624,14 @@
                 await new Promise(resolve => setTimeout(resolve, 100));
             }
             
+            // If we have no trained model (Q-table is empty), alert the user
+            const statesDiscovered = Object.keys(clientRL.qTable).length;
+            if (statesDiscovered === 0) {
+                document.getElementById('message').textContent = "You need to train the agent first! Click 'Train Agent' before running the simulation.";
+                return;
+            }
+            
+            // Update UI to show simulation is running
             gameState.simulation.running = true;
             document.getElementById('simulation-badge').classList.remove('d-none');
             document.getElementById('message').textContent = 'RL agent is now driving the car...';
@@ -430,6 +642,12 @@
             const numEpisodes = 5;
             let totalReward = 0;
             let successCount = 0;
+            const results = [];
+            
+            // Brief message about showing the learned policy
+            await new Promise(resolve => setTimeout(resolve, 500));
+            document.getElementById('message').textContent = 'Demonstrating the agent\'s learned policy (no exploration)...';
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
             for (let episode = 0; episode < numEpisodes; episode++) {
                 if (!gameState.simulation.running) break;
@@ -439,11 +657,26 @@
                 let state = gameState.observation;
                 let episodeReward = 0;
                 let done = false;
+                let stepCount = 0;
+                
+                document.getElementById('message').textContent = 
+                    `Running Episode ${episode+1}/${numEpisodes}... The agent is using its learned Q-values to choose actions.`;
                 
                 // Run single episode
-                while (!done && gameState.simulation.running) {
+                while (!done && gameState.simulation.running && stepCount < 100) {
                     // Get action from RL agent (no exploration during simulation)
                     const action = clientRL.getAction(state, false);
+                    
+                    // Display the decision-making process
+                    const discreteState = clientRL.discretizeState(state);
+                    const qValues = clientRL.qTable[discreteState] || [0, 0, 0];
+                    const actionLabels = ['Backward', 'Coast', 'Forward'];
+                    const bestAction = qValues.indexOf(Math.max(...qValues));
+                    
+                    // Show Q-values in message
+                    document.getElementById('message').textContent = 
+                        `Episode ${episode+1}, Step ${stepCount+1}: Agent chose to ${actionLabels[action]} ` +
+                        `(Q-values: [${qValues.map(v => v.toFixed(2)).join(', ')}])`;
                     
                     // Take action
                     await takeStep(action);
@@ -456,33 +689,60 @@
                     // Update state for next iteration
                     state = nextState;
                     episodeReward += reward;
-                    
-                    // Check if parked successfully
-                    if (done && gameState.info.is_parked) {
-                        successCount++;
-                    }
+                    stepCount++;
                     
                     // Delay for better visualization
                     await new Promise(resolve => setTimeout(resolve, 200));
                 }
                 
+                // Record episode results
                 totalReward += episodeReward;
+                const episodeSuccess = (done && gameState.info.is_parked);
+                if (episodeSuccess) {
+                    successCount++;
+                }
+                
+                results.push({
+                    episode: episode + 1,
+                    steps: stepCount,
+                    reward: episodeReward,
+                    success: episodeSuccess
+                });
+                
+                // Show episode result
+                const resultMessage = episodeSuccess ? 
+                    `Success! Parked correctly in ${stepCount} steps with reward ${episodeReward.toFixed(2)}.` :
+                    `Failed to park correctly. Total steps: ${stepCount}, reward: ${episodeReward.toFixed(2)}.`;
+                
+                document.getElementById('message').textContent = resultMessage;
                 
                 // Brief pause between episodes
                 if (episode < numEpisodes - 1 && gameState.simulation.running) {
-                    document.getElementById('message').textContent = 
-                        `Completed episode ${episode+1}/${numEpisodes}. Starting next episode...`;
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                 }
             }
             
-            // Simulation complete
+            // Simulation complete - Show detailed results
             if (gameState.simulation.running) {
                 const avgReward = totalReward / numEpisodes;
                 const successRate = successCount / numEpisodes * 100;
+                
+                // Format results as a summary message
+                let resultSummary = `Simulation Results (${successCount}/${numEpisodes} successful, ${successRate.toFixed(0)}% success rate):\\n`;
+                results.forEach(r => {
+                    resultSummary += `\\nEpisode ${r.episode}: ${r.success ? '✓ Success' : '✗ Failure'}, ${r.steps} steps, Reward: ${r.reward.toFixed(2)}`;
+                });
+                
                 document.getElementById('message').textContent = 
-                    `Simulation completed! Avg Reward: ${avgReward.toFixed(2)}, ` +
-                    `Success Rate: ${successRate.toFixed(0)}%`;
+                    `Simulation complete! ${successRate >= 80 ? 'The agent has mastered parking!' : 
+                    successRate >= 50 ? 'The agent is reasonably good at parking.' : 
+                    'The agent still needs more training.'}`;
+                
+                // Log detailed results to console for debugging
+                console.log(resultSummary);
+                
+                // Update metrics display
+                trainingMetrics.updateDisplay();
             }
             
             gameState.simulation.running = false;
